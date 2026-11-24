@@ -1,12 +1,31 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { AudioLines, GitCompareArrows, Headphones, Play, Square } from '@lucide/vue'
 import type { GuideNote, LyricLine, Take } from '../../../shared/document'
 import { clockLabel } from '../../../shared/time'
 import { accuracy } from '../lib/summary'
 
-defineProps<{ takes: Take[]; slots: (Take | undefined)[]; activeId: string | null; selected: LyricLine | null; notes: GuideNote[]; issue: string }>()
+const props = defineProps<{
+  takes: Take[]
+  slots: (Take | undefined)[]
+  activeId: string | null
+  selected: LyricLine | null
+  notes: GuideNote[]
+  issue: string
+  replayPosition: number | null
+}>()
 const emit = defineEmits<{ listen: [Take]; choose: [0 | 1, string] }>()
 const slotIndices = [0, 1] as const
+
+const activeTake = computed(() => props.takes.find(take => take.id === props.activeId) ?? null)
+const activeCue = computed(() => activeTake.value?.cueSnapshot ?? null)
+const activeTokenId = computed(() => {
+  const doc = activeCue.value
+  const time = props.replayPosition
+  if (!doc || time === null) return null
+  const current = doc.tokens.find(token => time >= token.start && time < token.end)
+  return current?.id ?? null
+})
 </script>
 
 <template>
@@ -25,6 +44,21 @@ const slotIndices = [0, 1] as const
         <span class="mono take-score" title="检测到的音高中命中参考音的占比">{{ accuracy(take, notes) ?? '—' }}<template v-if="accuracy(take, notes) !== null">%</template></span>
       </li>
     </ol>
+
+    <div v-if="activeTake" class="take-cue">
+      <p class="take-cue-title">录音时的原逐字提示 <span class="mono">v{{ activeTake.cueSnapshot?.revision ?? '—' }}</span></p>
+      <div v-if="activeCue" class="take-cue-row">
+        <span
+          v-for="token in activeCue.tokens"
+          :key="token.id"
+          class="take-cue-char"
+          :class="[token.status, { singing: token.id === activeTokenId }]"
+          :title="`${token.start.toFixed(2)}s–${token.end.toFixed(2)}s`"
+        >{{ token.char }}</span>
+      </div>
+      <p v-else class="take-cue-empty subdued">该录音保存时还没有逐字提示。</p>
+    </div>
+
     <div v-if="takes.length" class="compare-tools">
       <p><GitCompareArrows :size="16" /> 音高对比</p>
       <label v-for="slot in slotIndices" :key="slot"><span :class="slot === 0 ? 'slot-a' : 'slot-b'">{{ slot === 0 ? 'A' : 'B' }}</span>
@@ -38,3 +72,41 @@ const slotIndices = [0, 1] as const
     <p v-if="issue" class="inline-error" role="alert">{{ issue }}</p>
   </section>
 </template>
+
+<style scoped>
+.take-cue {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.take-cue-title {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.take-cue-title span { color: var(--soft); }
+.take-cue-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.take-cue-char {
+  min-width: 24px;
+  padding: 4px 5px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  background: #2a2e25;
+  border: 1px solid transparent;
+  color: var(--muted);
+}
+.take-cue-char.confirmed { border-color: rgba(184, 220, 157, 0.6); }
+.take-cue-char.auto { border-color: rgba(229, 189, 112, 0.5); }
+.take-cue-char.review { border-color: rgba(240, 153, 130, 0.7); }
+.take-cue-char.singing {
+  background: var(--gold);
+  color: #241e12;
+  transform: translateY(-2px);
+}
+.take-cue-empty { font-size: 11px; }
+.subdued { color: var(--muted); }
+</style>

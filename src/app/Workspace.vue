@@ -2,13 +2,14 @@
 import { AudioLines } from '@lucide/vue'
 import { songs, SongCatalog, SongHeading, TransportBar } from '../features/playback'
 import { LyricStage, PhraseList } from '../features/lyrics'
+import { CuePanel } from '../features/cues'
 import { RecordControls } from '../features/capture'
 import { PitchPanel } from '../features/pitch'
 import { ReviewPanel } from '../features/review'
 import { useWorkspace } from './useWorkspace'
 
 const {
-  transport, lyrics, pitch, review, capture, graphRange, graphPosition,
+  transport, lyrics, pitch, review, capture, cues, graphRange, graphPosition,
   selectLine, adjacent, selectSong, seek, toggleLoop, togglePlay, toggleRecording, listen,
 } = useWorkspace()
 </script>
@@ -29,6 +30,8 @@ const {
       <SongHeading :song="transport.song.value" />
       <LyricStage :selected="lyrics.selected.value" :active="lyrics.active.value" :upcoming="lyrics.upcoming.value"
         :playing="transport.isPlaying.value" :progress="lyrics.lineProgress.value" />
+      <CuePanel v-if="lyrics.selected.value" :editor="cues" :song="transport.song.value"
+        :line="lyrics.selected.value" :position="transport.position.value" />
       <PitchPanel :notes="transport.song.value.notes" :position="graphPosition" :range="graphRange"
         :latest="capture.status.value === 'recording' ? pitch.latest.value : null"
         :live="capture.status.value === 'recording' ? pitch.points.value : []"
@@ -43,6 +46,7 @@ const {
     <aside class="right-rail">
       <ReviewPanel :takes="review.visible.value" :slots="review.slots.value" :active-id="review.playingId.value"
         :selected="lyrics.selected.value" :notes="transport.song.value.notes" :issue="review.issue.value"
+        :replay-position="review.position.value"
         @listen="listen" @choose="review.choose" />
     </aside>
   </main>

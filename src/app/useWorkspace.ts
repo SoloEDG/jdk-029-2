@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { songs, useTransport } from '../features/playback'
 import { useLyrics } from '../features/lyrics'
+import { useCueEditor } from '../features/cues'
 import { useCapture } from '../features/capture'
 import { usePitch } from '../features/pitch'
 import { useReview } from '../features/review'
@@ -16,12 +17,25 @@ export function useWorkspace() {
     capture.cancelRequest()
     transport.pause()
   })
+  const cues = useCueEditor(transport.song, lyrics.selected, transport.position, {
+    seek: position => transport.seek(position),
+    playRange: range => {
+      review.stop()
+      transport.loop.value = range
+      transport.seek(range.start)
+      void transport.play()
+    },
+  })
   const capture = useCapture({
     onFrame: pitch.receive,
     position: transport.read,
     onComplete: async result => {
       await review.save({
-        ...result, id: crypto.randomUUID(), createdAt: Date.now(), pitch: pitch.slice(result),
+        ...result,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        pitch: pitch.slice(result),
+        cueSnapshot: cues.doc.value ? structuredClone(cues.doc.value) : undefined,
       })
     },
   })
@@ -116,10 +130,13 @@ export function useWorkspace() {
     transport.pause()
   }
   onMounted(() => document.addEventListener('visibilitychange', handleVisibility))
-  onBeforeUnmount(() => document.removeEventListener('visibilitychange', handleVisibility))
+  onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', handleVisibility)
+    void cues.flush()
+  })
 
   return {
-    transport, lyrics, pitch, review, capture, graphRange, graphPosition,
+    transport, lyrics, pitch, review, capture, cues, graphRange, graphPosition,
     selectLine, adjacent, selectSong, seek, toggleLoop, togglePlay, toggleRecording, listen,
   }
 }
